@@ -1,0 +1,50 @@
+# =============================================================================
+# Unified Cluster Outputs (cloud-agnostic)
+# =============================================================================
+
+output "cluster_name" {
+  description = "Name of the created cluster"
+  value = (
+    var.cloud_provider == "gke" ? module.gke_cluster[0].cluster_name :
+    "unknown"
+  )
+}
+
+output "cluster_endpoint" {
+  description = "Cluster API endpoint"
+  value = (
+    var.cloud_provider == "gke" ? module.gke_cluster[0].endpoint :
+    "unknown"
+  )
+  sensitive = true
+}
+
+output "cluster_ca_certificate" {
+  description = "Cluster CA certificate (base64 encoded)"
+  value = (
+    var.cloud_provider == "gke" ? module.gke_cluster[0].ca_certificate :
+    "unknown"
+  )
+  sensitive = true
+}
+
+output "cluster_location" {
+  description = "Cluster location (zone or region)"
+  value = (
+    var.cloud_provider == "gke" ? module.gke_cluster[0].location :
+    "unknown"
+  )
+}
+
+# =============================================================================
+# Connection Instructions
+# =============================================================================
+
+output "connect_command" {
+  description = "Command to configure kubectl"
+  value = (
+    var.cloud_provider == "gke" ?
+    "gcloud container clusters get-credentials ${module.gke_cluster[0].cluster_name} --zone ${module.gke_cluster[0].location} --project ${var.gcp_project_id}" :
+    "# Connection command not available for ${var.cloud_provider}"
+  )
+}
