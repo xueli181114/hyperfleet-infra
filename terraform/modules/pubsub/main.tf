@@ -1,7 +1,16 @@
 locals {
-  topic_name        = var.topic_name != "" ? var.topic_name : "${var.namespace}-${var.resource_type}"
-  subscription_name = var.subscription_name != "" ? var.subscription_name : "${var.namespace}-adapter"
-  dlq_topic_name    = "${local.topic_name}-dlq"
+  topic_name     = var.topic_name != "" ? var.topic_name : "${var.namespace}-${var.resource_type}-${var.developer_name}"
+  dlq_topic_name = "${local.topic_name}-dlq"
+
+  # Create map of adapters with their configurations
+  # Key: adapter name, Value: subscription and service account names
+  adapter_configs = {
+    for adapter in var.adapters : adapter => {
+      subscription_name        = "${var.namespace}-${adapter}-adapter-${var.developer_name}"
+      gcp_service_account_name = "${adapter}-adapter-${var.developer_name}"
+      k8s_service_account_name = "${adapter}-adapter"
+    }
+  }
 
   common_labels = merge(var.labels, {
     managed-by = "terraform"
@@ -34,10 +43,12 @@ resource "google_pubsub_topic" "dead_letter" {
 }
 
 # =============================================================================
-# Pub/Sub Subscription for Adapter
+# Pub/Sub Subscriptions for Adapters
 # =============================================================================
-resource "google_pubsub_subscription" "adapter" {
-  name    = local.subscription_name
+resource "google_pubsub_subscription" "adapters" {
+  for_each = local.adapter_configs
+
+  name    = each.value.subscription_name
   topic   = google_pubsub_topic.events.name
   project = var.project_id
 

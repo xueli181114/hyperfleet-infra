@@ -58,9 +58,9 @@ output "sentinel_service_account_email" {
   value       = var.enable_pubsub ? module.pubsub[0].sentinel_service_account_email : ""
 }
 
-output "adapter_service_account_email" {
-  description = "Email of the Adapter GCP service account"
-  value       = var.enable_pubsub ? module.pubsub[0].adapter_service_account_email : ""
+output "adapter_service_accounts" {
+  description = "Map of adapter names to their GCP service account emails"
+  value       = var.enable_pubsub ? module.pubsub[0].adapter_service_accounts : {}
 }
 
 output "topic_name" {
@@ -68,9 +68,14 @@ output "topic_name" {
   value       = var.enable_pubsub ? module.pubsub[0].topic_name : ""
 }
 
-output "subscription_name" {
-  description = "Name of the Pub/Sub subscription"
-  value       = var.enable_pubsub ? module.pubsub[0].subscription_name : ""
+output "subscription_names" {
+  description = "List of all adapter subscription names"
+  value       = var.enable_pubsub ? module.pubsub[0].subscription_names : []
+}
+
+output "dlq_topic_name" {
+  description = "Name of the dead letter topic (null when DLQ is disabled)"
+  value       = var.enable_pubsub ? module.pubsub[0].dlq_topic_name : null
 }
 
 output "helm_values_snippet" {

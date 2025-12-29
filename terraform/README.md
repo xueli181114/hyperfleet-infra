@@ -79,6 +79,19 @@ gcloud container clusters get-credentials hyperfleet-dev-<username> \
 kubectl get nodes
 ```
 
+### Using Shared Configuration
+
+For shared environment configuration, use `dev-shared.tfvars` in addition to your personal tfvars:
+
+```bash
+# Apply with both shared and personal configuration
+terraform apply \
+  -var-file=envs/gke/dev-shared.tfvars \
+  -var-file=envs/gke/dev-<username>.tfvars
+```
+
+Personal tfvars override shared values, so you can customize specific settings while inheriting common defaults.
+
 ## Destroying Your Cluster
 
 **Always destroy your cluster when you're done to avoid unnecessary costs.**
@@ -100,9 +113,10 @@ terraform destroy -var-file=envs/gke/dev-<username>.tfvars
 | `node_count` | Number of nodes | `1` |
 | `machine_type` | VM instance type | `e2-standard-4` |
 | `use_spot_vms` | Use Spot VMs for cost savings | `true` |
+| `namespace` | Kubernetes namespace for Workload Identity binding | `hyperfleet-system` |
 | `enable_pubsub` | Enable Google Pub/Sub resources | `false` |
 | `enable_dead_letter` | Enable dead letter queue for Pub/Sub | `true` |
-| `kubernetes_namespace` | Namespace for Workload Identity bindings | `hyperfleet-system` |
+| `adapters` | List of adapter names for Pub/Sub subscriptions | `["landing-zone", "validation-gcp"]` |
 
 ## Cost Optimization
 
@@ -120,9 +134,12 @@ Enable Pub/Sub to use Google's managed message broker instead of RabbitMQ.
 Add to your tfvars file:
 
 ```hcl
+namespace = "hyperfleet-system"  # Kubernetes namespace for Workload Identity binding
 enable_pubsub = true
 enable_dead_letter = true  # Optional, defaults to true
-kubernetes_namespace = "hyperfleet-system"
+
+# Configure adapters - each gets its own subscription
+adapters = ["landing-zone", "validation-gcp"]
 ```
 
 Or pass as command line arguments:
@@ -132,16 +149,56 @@ terraform apply -var-file=envs/gke/dev-<username>.tfvars \
   -var="enable_pubsub=true"
 ```
 
+### Customizing Adapters
+
+Each adapter in the `adapters` list gets its own Pub/Sub subscription and service account. You can customize the list in your tfvars file:
+
+```hcl
+# Add more adapters
+adapters = ["landing-zone", "validation-gcp", "validation-aws", "orchestrator"]
+
+# Test with a single adapter
+adapters = ["landing-zone"]
+
+# Remove all adapters (topic only, no subscriptions)
+adapters = []
+```
+
+When you add or remove adapters and re-run `terraform apply`, the infrastructure will be updated accordingly.
+
 ### What It Creates
 
 | Resource | Name Pattern | Description |
 |----------|--------------|-------------|
-| Pub/Sub Topic | `{namespace}-clusters` | Event topic for cluster resources |
-| Pub/Sub Subscription | `{namespace}-adapter` | Subscription for adapter service |
-| Dead Letter Topic | `{namespace}-clusters-dlq` | Failed message storage (optional) |
+| Pub/Sub Topic | `{namespace}-clusters-{developer}` | Event topic for cluster resources |
+| Pub/Sub Subscriptions | `{namespace}-{adapter}-adapter-{developer}` | One subscription per adapter |
+| Dead Letter Topic | `{namespace}-clusters-{developer}-dlq` | Failed message storage (optional) |
 | Service Account | `hyperfleet-sentinel-{developer}` | Publisher SA for sentinel |
-| Service Account | `hyperfleet-adapter-{developer}` | Subscriber SA for adapter |
+| Service Accounts | `{adapter}-adapter-{developer}` | Subscriber SA for each adapter |
 | Workload Identity | - | Binds K8s SAs to GCP SAs |
+
+**Example with developer `alice` and adapters `["landing-zone", "validation-gcp"]`:**
+- Topic: `hyperfleet-system-clusters-alice`
+- Subscriptions: `hyperfleet-system-landing-zone-adapter-alice`, `hyperfleet-system-validation-gcp-adapter-alice`
+- Service Accounts: `landing-zone-adapter-alice`, `validation-gcp-adapter-alice`, `hyperfleet-sentinel-alice`
+
+Each developer gets completely isolated Pub/Sub resources - no conflicts between developer environments.
+
+### IAM Permissions
+
+The module configures resource-level IAM permissions following the principle of least privilege:
+
+**Sentinel Service Account** (`hyperfleet-sentinel-{developer}`):
+- `roles/pubsub.publisher` on **topic** - Publish messages to the topic
+- `roles/pubsub.viewer` on **topic** - View topic metadata (required to check if topic exists)
+- `roles/iam.workloadIdentityUser` on **service account** - Allow K8s SA `sentinel` to impersonate this GCP SA
+
+**Adapter Service Accounts** (`{adapter}-adapter-{developer}`):
+- `roles/pubsub.subscriber` on **subscription** - Pull and acknowledge messages from their subscription
+- `roles/pubsub.viewer` on **subscription** - View subscription metadata
+- `roles/iam.workloadIdentityUser` on **service account** - Allow K8s SA `{adapter}-adapter` to impersonate this GCP SA
+
+**Note**: These are resource-level IAM bindings, not project-level roles. Adapters only have permissions on their specific subscription, not on the topic.
 
 ### Outputs
 
@@ -150,11 +207,11 @@ After applying with `enable_pubsub=true`, you'll get these outputs:
 ```bash
 # Get service account emails for Helm values
 terraform output sentinel_service_account_email
-terraform output adapter_service_account_email
+terraform output adapter_service_accounts
 
 # Get topic/subscription names
 terraform output topic_name
-terraform output subscription_name
+terraform output subscription_names
 
 # Get ready-to-use Helm values snippet
 terraform output helm_values_snippet
@@ -176,10 +233,17 @@ sentinel:
     annotations:
       iam.gke.io/gcp-service-account: <sentinel_service_account_email>
 
-hyperfleet-adapter:
+landing-zone-adapter:
   serviceAccount:
+    name: landing-zone-adapter
     annotations:
-      iam.gke.io/gcp-service-account: <adapter_service_account_email>
+      iam.gke.io/gcp-service-account: <landing-zone-adapter-service-account-email>
+
+validation-gcp-adapter:
+  serviceAccount:
+    name: validation-gcp-adapter
+    annotations:
+      iam.gke.io/gcp-service-account: <validation-gcp-adapter-service-account-email>
 ```
 
 ## Directory Structure

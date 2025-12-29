@@ -9,7 +9,7 @@
 # =============================================================================
 # Required: Your Info
 # =============================================================================
-developer_name = "CHANGE_ME"  # Your username (e.g., "your-username")
+developer_name = "shared"  # Your username (e.g., "your-username")
 
 # =============================================================================
 # Cloud Provider
@@ -37,7 +37,7 @@ use_spot_vms = true           # ~70% cost savings, may be preempted
 # =============================================================================
 # Pub/Sub Configuration (for HyperFleet messaging)
 # =============================================================================
-enable_pubsub      = false # Set to true to enable Google Pub/Sub for event messaging
+enable_pubsub      = true # Set to true to enable Google Pub/Sub for event messaging
 namespace          = "hyperfleet-system" # Kubernetes namespace for Workload Identity binding
 enable_dead_letter = true  # Enable dead letter queue for failed messages
 

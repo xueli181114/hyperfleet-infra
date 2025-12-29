@@ -9,6 +9,11 @@ variable "namespace" {
   default     = "hyperfleet-system"
 }
 
+variable "developer_name" {
+  description = "Developer name to include in GCP service account names for uniqueness"
+  type        = string
+}
+
 variable "resource_type" {
   description = "Resource type for topic naming (e.g., clusters, nodepools)"
   type        = string
@@ -21,10 +26,10 @@ variable "topic_name" {
   default     = ""
 }
 
-variable "subscription_name" {
-  description = "Override subscription name (default: {namespace}-adapter)"
-  type        = string
-  default     = ""
+variable "adapters" {
+  description = "List of adapter names. Each adapter gets subscription named: {namespace}-{adapter-name}-adapter"
+  type        = list(string)
+  default     = []
 }
 
 variable "message_retention_duration" {
@@ -61,28 +66,10 @@ variable "max_delivery_attempts" {
   }
 }
 
-variable "sentinel_sa_name" {
-  description = "Sentinel GCP service account name"
-  type        = string
-  default     = "hyperfleet-sentinel"
-}
-
-variable "adapter_sa_name" {
-  description = "Adapter GCP service account name"
-  type        = string
-  default     = "hyperfleet-adapter"
-}
-
 variable "sentinel_k8s_sa_name" {
   description = "Sentinel Kubernetes service account name"
   type        = string
   default     = "sentinel"
-}
-
-variable "adapter_k8s_sa_name" {
-  description = "Adapter Kubernetes service account name"
-  type        = string
-  default     = "hyperfleet-adapter"
 }
 
 variable "labels" {
