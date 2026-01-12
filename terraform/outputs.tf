@@ -54,6 +54,16 @@ output "connect_command" {
 # =============================================================================
 
 output "pubsub_config" {
-  description = "Complete Pub/Sub configuration for constructing Helm values (sentinel, adapters, topics)"
+  description = "Complete Pub/Sub configuration for constructing Helm values (WIF-based)"
   value       = var.use_pubsub ? module.pubsub[0].pubsub_config : null
+}
+
+output "pubsub_resources" {
+  description = "Complete Pub/Sub resources organized by topic, including subscriptions and publishers"
+  value       = var.use_pubsub ? module.pubsub[0].pubsub_resources : null
+}
+
+output "helm_values_snippet" {
+  description = "Snippet to add to Helm values for Workload Identity and Pub/Sub configuration"
+  value       = var.use_pubsub ? module.pubsub[0].helm_values_snippet : null
 }
