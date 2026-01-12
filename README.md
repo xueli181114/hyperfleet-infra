@@ -44,6 +44,7 @@ cd terraform
 terraform init
 cp envs/gke/dev.tfvars.example envs/gke/dev-<username>.tfvars
 # Edit the file: set developer_name = "your-username"
+# Optionally customize kubernetes_suffix (default: "default")
 terraform apply -var-file=envs/gke/dev-<username>.tfvars
 ```
 

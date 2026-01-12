@@ -1,46 +1,41 @@
-# =============================================================================
-# Sentinel Workload Identity (Publisher) - Publishes to all topics
-# =============================================================================
-# Grant Sentinel permission to publish to all topics using WIF principal
-resource "google_pubsub_topic_iam_member" "sentinel_publisher" {
-  for_each = local.topics
-
-  topic   = google_pubsub_topic.topics[each.key].name
-  role    = "roles/pubsub.publisher"
-  member  = "principal://iam.googleapis.com/projects/${data.google_project.current.number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/${var.kubernetes_namespace}/sa/${var.sentinel_k8s_sa_name}"
-  project = var.project_id
+# Get current project info for service account references
+data "google_project" "current" {
+  project_id = var.project_id
 }
 
-# Grant Sentinel permission to view all topics metadata (needed to check if topic exists)
-resource "google_pubsub_topic_iam_member" "sentinel_viewer" {
-  for_each = local.topics
+# =============================================================================
+# Workload Identity Federation Principal Prefix
+# =============================================================================
+locals {
+  # Common WIF principal prefix for all Kubernetes service accounts
+  wif_principal_prefix = "principal://iam.googleapis.com/projects/${data.google_project.current.number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/${var.kubernetes_namespace}/sa/"
+}
 
-  topic   = google_pubsub_topic.topics[each.key].name
-  role    = "roles/pubsub.viewer"
-  member  = "principal://iam.googleapis.com/projects/${data.google_project.current.number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/${var.kubernetes_namespace}/sa/${var.sentinel_k8s_sa_name}"
+# =============================================================================
+# Publisher Workload Identity - Grant permissions to publishers on their topics
+# =============================================================================
+# Grant publisher permissions to topics using WIF principals
+# This dynamically assigns roles based on the publishers configuration
+resource "google_pubsub_topic_iam_member" "publishers" {
+  for_each = local.all_publisher_roles
+
+  topic   = google_pubsub_topic.topics[each.value.topic_name].name
+  role    = each.value.role
+  member  = "${local.wif_principal_prefix}${each.value.publisher_name}"
   project = var.project_id
 }
 
 # =============================================================================
 # Adapter Workload Identity (Subscribers)
 # =============================================================================
-# Grant Adapter permission to subscribe to their subscriptions using WIF principals
-resource "google_pubsub_subscription_iam_member" "adapters_subscriber" {
-  for_each = local.all_subscriptions
+# Grant Adapter permissions to their subscriptions using WIF principals
+# This dynamically assigns roles based on the subscriptions configuration
+resource "google_pubsub_subscription_iam_member" "adapters" {
+  for_each = local.all_subscription_roles
 
-  subscription = google_pubsub_subscription.subscriptions[each.key].name
-  role         = "roles/pubsub.subscriber"
-  member       = "principal://iam.googleapis.com/projects/${data.google_project.current.number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/${var.kubernetes_namespace}/sa/${each.value.adapter_name}-adapter"
-  project      = var.project_id
-}
-
-# Grant Adapter permission to view subscriptions (needed for some operations)
-resource "google_pubsub_subscription_iam_member" "adapters_viewer" {
-  for_each = local.all_subscriptions
-
-  subscription = google_pubsub_subscription.subscriptions[each.key].name
-  role         = "roles/pubsub.viewer"
-  member       = "principal://iam.googleapis.com/projects/${data.google_project.current.number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/${var.kubernetes_namespace}/sa/${each.value.adapter_name}-adapter"
+  subscription = google_pubsub_subscription.subscriptions[each.value.subscription_key].name
+  role         = each.value.role
+  member       = "${local.wif_principal_prefix}${each.value.adapter_name}-adapter"
   project      = var.project_id
 }
 
@@ -67,9 +62,4 @@ resource "google_pubsub_subscription_iam_member" "pubsub_dlq_subscriber" {
   role         = "roles/pubsub.subscriber"
   member       = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-pubsub.iam.gserviceaccount.com"
   project      = var.project_id
-}
-
-# Get current project info for service account references
-data "google_project" "current" {
-  project_id = var.project_id
 }

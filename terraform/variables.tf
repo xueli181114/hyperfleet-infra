@@ -20,6 +20,12 @@ variable "developer_name" {
   type        = string
 }
 
+variable "kubernetes_suffix" {
+  description = "Suffix for Kubernetes namespace (allows multiple deployments to share a cluster)"
+  type        = string
+  default     = "default"
+}
+
 # =============================================================================
 # Cluster Configuration
 # =============================================================================
@@ -111,34 +117,47 @@ variable "enable_dead_letter" {
 
 variable "pubsub_topic_configs" {
   description = <<-EOT
-    Pub/Sub topic configurations. Each topic can have its own set of adapter subscriptions.
+    Pub/Sub topic configurations. Each topic can have its own set of subscriptions and publishers.
 
     Example:
       pubsub_topic_configs = {
         clusters = {
-          adapter_subscriptions = {
+          subscriptions = {
             landing-zone   = {}
             validation-gcp = { ack_deadline_seconds = 120 }
           }
+          publishers = {
+            sentinel = {}
+          }
         }
         nodepools = {
-          adapter_subscriptions = {
-            validation-gcp = {}
+          subscriptions = {
+            validation-nodepool-gcp = {}
+          }
+          publishers = {
+            sentinel = {}
           }
         }
       }
   EOT
   type = map(object({
     message_retention_duration = optional(string, "604800s")
-    adapter_subscriptions = map(object({
+    subscriptions = optional(map(object({
       ack_deadline_seconds = optional(number, 60)
-    }))
+      roles                = optional(list(string), ["roles/pubsub.subscriber", "roles/pubsub.viewer"])
+    })), {})
+    publishers = optional(map(object({
+      roles = optional(list(string), ["roles/pubsub.publisher", "roles/pubsub.viewer"])
+    })), {})
   }))
   default = {
     clusters = {
-      adapter_subscriptions = {
+      subscriptions = {
         landing-zone   = {}
         validation-gcp = {}
+      }
+      publishers = {
+        sentinel = {}
       }
     }
   }
