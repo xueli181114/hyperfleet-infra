@@ -9,7 +9,8 @@
 # =============================================================================
 # Required: Your Info
 # =============================================================================
-developer_name = "CHANGE_ME"  # Your username (e.g., "your-username")
+developer_name     = "CHANGE_ME"  # Your username (e.g., "your-username")
+kubernetes_suffix  = "default"    # Namespace suffix (allows multiple deployments to share a cluster)
 
 # =============================================================================
 # Cloud Provider
@@ -38,21 +39,26 @@ use_spot_vms = true           # ~70% cost savings, may be preempted
 # Pub/Sub Configuration (for HyperFleet messaging)
 # =============================================================================
 use_pubsub           = false # Set to true to use Google Pub/Sub for event messaging
-kubernetes_namespace = "hyperfleet-system" # Kubernetes namespace for Workload Identity binding
 enable_dead_letter   = true  # Enable dead letter queue for failed messages
 
-# Topic configurations - each topic can have different adapter subscriptions
+# Topic configurations - each topic can have different subscriptions and publishers
 # Uncomment and customize as needed for your development environment
 # pubsub_topic_configs = {
 #   clusters = {
-#     adapter_subscriptions = {
+#     subscribers = {
 #       landing-zone   = {}
 #       validation-gcp = {}
 #     }
+#     publishers = {
+#       sentinel = {}
+#     }
 #   }
 #   nodepools = {
-#     adapter_subscriptions = {
-#       validation-gcp = {}
+#     subscribers = {
+#       validation-nodepool-gcp = {}
+#     }
+#     publishers = {
+#       sentinel = {}
 #     }
 #   }
 # }

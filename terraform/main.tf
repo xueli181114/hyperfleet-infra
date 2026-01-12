@@ -1,5 +1,6 @@
 locals {
-  cluster_name = "hyperfleet-dev-${var.developer_name}"
+  cluster_name         = "hyperfleet-dev-${var.developer_name}"
+  kubernetes_namespace = "${var.developer_name}-${var.kubernetes_suffix}"
 
   common_labels = {
     environment = "dev"
@@ -54,14 +55,11 @@ module "pubsub" {
   count  = var.use_pubsub ? 1 : 0
 
   project_id           = var.gcp_project_id
-  kubernetes_namespace = var.kubernetes_namespace
+  kubernetes_namespace = local.kubernetes_namespace
   developer_name       = var.developer_name
 
-  # Topic configurations with adapter subscriptions
+  # Topic configurations with subscriptions and publishers
   topic_configs = var.pubsub_topic_configs
-
-  # Kubernetes service account name for Sentinel (shared across all topics)
-  sentinel_k8s_sa_name = "sentinel"
 
   # Dead letter queue
   enable_dead_letter    = var.enable_dead_letter

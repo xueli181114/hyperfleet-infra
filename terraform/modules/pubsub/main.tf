@@ -3,10 +3,11 @@ locals {
   # Key: topic name, Value: topic configuration with full topic name
   topics = {
     for topic_name, topic_config in var.topic_configs : topic_name => {
-      full_topic_name            = "${var.kubernetes_namespace}-${topic_name}-${var.developer_name}"
-      dlq_topic_name             = "${var.kubernetes_namespace}-${topic_name}-${var.developer_name}-dlq"
+      full_topic_name            = "${var.kubernetes_namespace}-${topic_name}"
+      dlq_topic_name             = "${var.kubernetes_namespace}-${topic_name}-dlq"
       message_retention_duration = topic_config.message_retention_duration
-      adapter_subscriptions      = topic_config.adapter_subscriptions
+      subscribers                = topic_config.subscribers
+      publishers                 = topic_config.publishers
     }
   }
 
@@ -14,21 +15,47 @@ locals {
   # Key: "{topic_name}-{adapter_name}", Value: subscription configuration
   all_subscriptions = merge([
     for topic_name, topic_config in local.topics : {
-      for adapter_name, adapter_config in topic_config.adapter_subscriptions :
+      for adapter_name, adapter_config in topic_config.subscribers :
       "${topic_name}-${adapter_name}" => {
-        subscription_name    = "${var.kubernetes_namespace}-${topic_name}-${adapter_name}-adapter-${var.developer_name}"
+        subscription_name    = "${var.kubernetes_namespace}-${topic_name}-${adapter_name}-adapter"
         adapter_name         = adapter_name
         topic_name           = topic_name
         ack_deadline_seconds = adapter_config.ack_deadline_seconds
+        roles                = adapter_config.roles
       }
     }
   ]...)
 
-  # Get unique adapter names across all topics for service account creation
-  unique_adapters = toset(flatten([
-    for topic_name, topic_config in var.topic_configs :
-    keys(topic_config.adapter_subscriptions)
-  ]))
+  # Flatten all subscription-adapter-role combinations into a single map
+  # Key: "{topic_name}-{adapter_name}-{role_short}", Value: subscription role configuration
+  all_subscription_roles = merge([
+    for topic_name, topic_config in local.topics : merge([
+      for adapter_name, adapter_config in topic_config.subscribers : {
+        for role in adapter_config.roles :
+        "${topic_name}-${adapter_name}-${replace(role, "roles/pubsub.", "")}" => {
+          topic_name        = topic_name
+          adapter_name      = adapter_name
+          subscription_key  = "${topic_name}-${adapter_name}"
+          role              = role
+        }
+      }
+    ]...)
+  ]...)
+
+  # Flatten all publisher-topic-role combinations into a single map
+  # Key: "{topic_name}-{publisher_name}-{role_short}", Value: publisher configuration
+  all_publisher_roles = merge([
+    for topic_name, topic_config in local.topics : merge([
+      for publisher_name, publisher_config in topic_config.publishers : {
+        for role in publisher_config.roles :
+        "${topic_name}-${publisher_name}-${replace(role, "roles/pubsub.", "")}" => {
+          topic_name     = topic_name
+          publisher_name = publisher_name
+          role           = role
+        }
+      }
+    ]...)
+  ]...)
 
   common_labels = merge(var.labels, {
     managed-by = "terraform"
