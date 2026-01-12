@@ -1,134 +1,67 @@
 # =============================================================================
-# Pub/Sub Resources Output (Hierarchical)
+# Pub/Sub Configuration Output (Complete Data for Helm Values)
 # =============================================================================
-output "pubsub_resources" {
-  description = "Complete Pub/Sub resources organized by topic, including subscriptions"
-  value = {
-    for topic_name, topic_config in local.topics : topic_name => {
-      topic_name     = google_pubsub_topic.topics[topic_name].name
-      topic_id       = google_pubsub_topic.topics[topic_name].id
-      dlq_topic_name = var.enable_dead_letter ? google_pubsub_topic.dead_letter[topic_name].name : null
+# This output provides ALL Pub/Sub configuration data needed to construct
+# Helm values for any deployment scenario (single or multi-topic).
+#
+# Example usage:
+#   terraform output -json pubsub_config | jq '.sentinel.topics.clusters.topic_name'
+#   terraform output -json pubsub_config | jq '.adapters["validation-gcp"].subscriptions'
 
-      subscriptions = {
-        for adapter_name, adapter_config in topic_config.adapter_subscriptions :
-        adapter_name => {
-          name                  = google_pubsub_subscription.subscriptions["${topic_name}-${adapter_name}"].name
-          id                    = google_pubsub_subscription.subscriptions["${topic_name}-${adapter_name}"].id
-          service_account_email = google_service_account.adapters[adapter_name].email
-          ack_deadline_seconds  = adapter_config.ack_deadline_seconds
+output "pubsub_config" {
+  description = "Complete Pub/Sub configuration for constructing Helm values"
+  value = {
+    # GCP Project
+    project_id = var.project_id
+
+    # Sentinel configuration
+    # One GCP service account with publish permissions on ALL topics.
+    # Deploy separate sentinel instances per resource type, each publishing to one topic.
+    sentinel = {
+      service_account_email = google_service_account.sentinel.email
+      k8s_service_account   = var.sentinel_k8s_sa_name
+
+      # All topics sentinel can publish to
+      topics = {
+        for topic_name, _ in local.topics : topic_name => {
+          topic_name     = google_pubsub_topic.topics[topic_name].name
+          topic_id       = google_pubsub_topic.topics[topic_name].id
+          dlq_topic_name = var.enable_dead_letter ? google_pubsub_topic.dead_letter[topic_name].name : null
+          resource_type  = topic_name # clusters, nodepools, etc.
         }
+      }
+    }
+
+    # Adapter configurations
+    # Each adapter has one GCP service account with subscribe permissions on its subscriptions.
+    # An adapter may subscribe to multiple topics (e.g., validation-gcp on clusters AND nodepools).
+    adapters = {
+      for adapter in local.unique_adapters : adapter => {
+        service_account_email = google_service_account.adapters[adapter].email
+
+        # All subscriptions for this adapter (across all topics)
+        subscriptions = {
+          for key, sub in local.all_subscriptions :
+          sub.topic_name => {
+            topic_name        = google_pubsub_topic.topics[sub.topic_name].name
+            subscription_name = google_pubsub_subscription.subscriptions[key].name
+            subscription_id   = google_pubsub_subscription.subscriptions[key].id
+            dlq_topic_name    = var.enable_dead_letter ? google_pubsub_topic.dead_letter[sub.topic_name].name : null
+            ack_deadline      = sub.ack_deadline_seconds
+          }
+          if sub.adapter_name == adapter
+        }
+      }
+    }
+
+    # All topics (for reference)
+    topics = {
+      for topic_name, _ in local.topics : topic_name => {
+        topic_name     = google_pubsub_topic.topics[topic_name].name
+        topic_id       = google_pubsub_topic.topics[topic_name].id
+        dlq_topic_name = var.enable_dead_letter ? google_pubsub_topic.dead_letter[topic_name].name : null
       }
     }
   }
 }
 
-# =============================================================================
-# Service Account Outputs
-# =============================================================================
-output "sentinel_service_account" {
-  description = "Sentinel GCP service account email (shared across all topics)"
-  value       = google_service_account.sentinel.email
-}
-
-output "adapter_service_accounts" {
-  description = "Map of adapter names to their GCP service account emails"
-  value = {
-    for adapter in local.unique_adapters : adapter => google_service_account.adapters[adapter].email
-  }
-}
-
-# =============================================================================
-# Helm Values Snippet
-# =============================================================================
-# Updated for hyperfleet-gcp overlay chart structure:
-# - Base chart components (sentinel, landing-zone) go under "base:" prefix
-# - GCP overlay components (validation-gcp) stay at root level
-#
-# NOTE: This template assumes each adapter (sentinel, landing-zone, validation-gcp)
-# is configured for at most ONE topic. The Helm chart expects single blocks per adapter.
-# If an adapter subscribes to multiple topics, only the first (alphabetically) is used.
-
-output "helm_values_snippet" {
-  description = "Snippet to add to Helm values for Workload Identity annotations and Pub/Sub configuration"
-  value       = <<-EOT
-# =============================================================================
-# HyperFleet Helm Values for GCP with Pub/Sub
-# Generated by terraform - use with charts/hyperfleet-gcp
-#
-# Usage:
-#   helm install hyperfleet charts/hyperfleet-gcp -f <this-file> -n hyperfleet-system
-# =============================================================================
-
-# Base chart overrides (API, Sentinel, Landing Zone)
-base:
-  global:
-    broker:
-      type: googlepubsub
-      googlepubsub:
-        enabled: true
-        projectId: "${var.project_id}"
-        createTopicIfMissing: false
-        createSubscriptionIfMissing: false
-      rabbitmq:
-        enabled: false
-%{if local.first_topic_name != null~}
-
-  # Sentinel - publishes to ${google_pubsub_topic.topics[local.first_topic_name].name}
-  sentinel:
-    serviceAccount:
-      create: true
-      name: ${var.sentinel_k8s_sa_name}
-      annotations:
-        iam.gke.io/gcp-service-account: ${google_service_account.sentinel.email}
-    broker:
-      type: googlepubsub
-      topic: ${google_pubsub_topic.topics[local.first_topic_name].name}
-      googlepubsub:
-        projectId: ${var.project_id}
-%{endif~}
-%{if local.landing_zone_topic != null~}
-
-  # Landing Zone Adapter - subscribes to ${google_pubsub_topic.topics[local.landing_zone_topic].name}
-  landing-zone:
-    serviceAccount:
-      create: true
-      name: landing-zone-adapter
-      annotations:
-        iam.gke.io/gcp-service-account: ${google_service_account.adapters["landing-zone"].email}
-    broker:
-      type: googlepubsub
-      googlepubsub:
-        projectId: ${var.project_id}
-        topic: ${google_pubsub_topic.topics[local.landing_zone_topic].name}
-        subscription: ${google_pubsub_subscription.subscriptions["${local.landing_zone_topic}-landing-zone"].name}
-%{if var.enable_dead_letter~}
-        deadLetterTopic: ${google_pubsub_topic.dead_letter[local.landing_zone_topic].name}
-%{endif~}
-%{endif~}
-
-  # Disable RabbitMQ when using Pub/Sub
-  rabbitmq:
-    enabled: false
-%{if local.validation_gcp_topic != null~}
-
-# GCP Validation Adapter (GCP overlay chart component - NOT under base:)
-# Subscribes to ${google_pubsub_topic.topics[local.validation_gcp_topic].name}
-validation-gcp:
-  enabled: true
-  serviceAccount:
-    create: true
-    name: validation-gcp-adapter
-    annotations:
-      iam.gke.io/gcp-service-account: ${google_service_account.adapters["validation-gcp"].email}
-  broker:
-    type: googlepubsub
-    googlepubsub:
-      projectId: ${var.project_id}
-      topic: ${google_pubsub_topic.topics[local.validation_gcp_topic].name}
-      subscription: ${google_pubsub_subscription.subscriptions["${local.validation_gcp_topic}-validation-gcp"].name}
-%{if var.enable_dead_letter~}
-      deadLetterTopic: ${google_pubsub_topic.dead_letter[local.validation_gcp_topic].name}
-%{endif~}
-%{endif~}
-  EOT
-}

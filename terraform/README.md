@@ -194,7 +194,13 @@ pubsub_topic_configs = {
 
 When you add or remove topics/subscriptions and re-run `terraform apply`, the infrastructure will be updated accordingly.
 
-> **Note**: The `helm_values_snippet` output assumes each adapter subscribes to at most ONE topic. If an adapter is configured for multiple topics (like `landing-zone` above), only the first topic (alphabetically) will be included in the Helm values. The Pub/Sub resources (topics, subscriptions, IAM) will be created correctly for all configured subscriptions.
+> **Note**: A single sentinel instance can only watch one resource type (clusters OR nodepools) and publish to one topic. If you need to watch multiple resource types:
+>
+> 1. Deploy separate sentinel instances (e.g., `sentinel-clusters`, `sentinel-nodepools`)
+> 2. Each instance uses the same GCP service account (`sentinel-{developer}`) which has publish permissions on all topics
+> 3. Configure each sentinel with its topic from `pubsub_config.sentinel.topics.<resource_type>`
+>
+> The `pubsub_config` output provides complete configuration data for all topics, subscriptions, and service accounts.
 
 ### What It Creates
 
@@ -248,104 +254,100 @@ The module configures resource-level IAM permissions following the principle of 
 
 ### Outputs
 
-After applying with `use_pubsub=true`, you'll get these outputs:
+After applying with `use_pubsub=true`, you'll get the `pubsub_config` output containing all Pub/Sub configuration data:
 
 ```bash
-# Get complete Pub/Sub resources (hierarchical view)
-terraform output pubsub_resources
+# Get complete Pub/Sub configuration
+terraform output -json pubsub_config
+```
 
-# Get service account emails for Helm values
-terraform output sentinel_service_account   # Sentinel email (shared across all topics)
-terraform output adapter_service_accounts
+**Output structure:**
 
-# Get ready-to-use Helm values snippet
-terraform output helm_values_snippet
+```json
+{
+  "project_id": "hcm-hyperfleet",
+  "sentinel": {
+    "service_account_email": "sentinel-alice@hcm-hyperfleet.iam.gserviceaccount.com",
+    "k8s_service_account": "sentinel",
+    "topics": {
+      "clusters": {
+        "topic_name": "hyperfleet-system-clusters-alice",
+        "topic_id": "projects/hcm-hyperfleet/topics/hyperfleet-system-clusters-alice",
+        "dlq_topic_name": "hyperfleet-system-clusters-alice-dlq",
+        "resource_type": "clusters"
+      },
+      "nodepools": {
+        "topic_name": "hyperfleet-system-nodepools-alice",
+        "topic_id": "projects/hcm-hyperfleet/topics/hyperfleet-system-nodepools-alice",
+        "dlq_topic_name": "hyperfleet-system-nodepools-alice-dlq",
+        "resource_type": "nodepools"
+      }
+    }
+  },
+  "adapters": {
+    "landing-zone": {
+      "service_account_email": "landing-zone-alice@hcm-hyperfleet.iam.gserviceaccount.com",
+      "subscriptions": {
+        "clusters": {
+          "topic_name": "hyperfleet-system-clusters-alice",
+          "subscription_name": "hyperfleet-system-clusters-landing-zone-adapter-alice",
+          "dlq_topic_name": "hyperfleet-system-clusters-alice-dlq",
+          "ack_deadline": 60
+        }
+      }
+    },
+    "validation-gcp": {
+      "service_account_email": "validation-gcp-alice@hcm-hyperfleet.iam.gserviceaccount.com",
+      "subscriptions": {
+        "clusters": {
+          "topic_name": "hyperfleet-system-clusters-alice",
+          "subscription_name": "hyperfleet-system-clusters-validation-gcp-adapter-alice",
+          "dlq_topic_name": "hyperfleet-system-clusters-alice-dlq",
+          "ack_deadline": 60
+        },
+        "nodepools": {
+          "topic_name": "hyperfleet-system-nodepools-alice",
+          "subscription_name": "hyperfleet-system-nodepools-validation-gcp-adapter-alice",
+          "dlq_topic_name": "hyperfleet-system-nodepools-alice-dlq",
+          "ack_deadline": 60
+        }
+      }
+    }
+  },
+  "topics": {
+    "clusters": {
+      "topic_name": "hyperfleet-system-clusters-alice",
+      "topic_id": "projects/hcm-hyperfleet/topics/hyperfleet-system-clusters-alice",
+      "dlq_topic_name": "hyperfleet-system-clusters-alice-dlq"
+    },
+    "nodepools": {
+      "topic_name": "hyperfleet-system-nodepools-alice",
+      "topic_id": "projects/hcm-hyperfleet/topics/hyperfleet-system-nodepools-alice",
+      "dlq_topic_name": "hyperfleet-system-nodepools-alice-dlq"
+    }
+  }
+}
+```
+
+**Extracting specific values with jq:**
+
+```bash
+# Get sentinel service account for Workload Identity
+terraform output -json pubsub_config | jq -r '.sentinel.service_account_email'
+
+# Get topic name for a specific resource type
+terraform output -json pubsub_config | jq -r '.sentinel.topics.clusters.topic_name'
+
+# Get adapter subscription details
+terraform output -json pubsub_config | jq -r '.adapters["validation-gcp"].subscriptions.clusters'
+
+# List all adapter names
+terraform output -json pubsub_config | jq -r '.adapters | keys[]'
 ```
 
 ### Helm Configuration
 
-Get the complete Helm values snippet (includes broker config and Workload Identity):
-
-```bash
-terraform output helm_values_snippet
-```
-
-The output is formatted for the **hyperfleet-gcp** overlay chart structure:
-- Base chart components (sentinel, landing-zone) are nested under the `base:` prefix
-- GCP overlay components (validation-gcp) are at the root level
-
-**Example output structure:**
-```yaml
-# =============================================================================
-# HyperFleet Helm Values for GCP with Pub/Sub
-# Generated by terraform - use with charts/hyperfleet-gcp
-#
-# Usage:
-#   helm install hyperfleet charts/hyperfleet-gcp -f <this-file> -n hyperfleet-system
-# =============================================================================
-
-# Base chart overrides (API, Sentinel, Landing Zone)
-base:
-  global:
-    broker:
-      type: googlepubsub
-      googlepubsub:
-        enabled: true
-        projectId: "hcm-hyperfleet"
-        createTopicIfMissing: false
-        createSubscriptionIfMissing: false
-      rabbitmq:
-        enabled: false
-
-  # Sentinel - publishes to hyperfleet-system-clusters-alice
-  sentinel:
-    serviceAccount:
-      create: true
-      name: sentinel
-      annotations:
-        iam.gke.io/gcp-service-account: sentinel-alice@hcm-hyperfleet.iam.gserviceaccount.com
-    broker:
-      type: googlepubsub
-      topic: hyperfleet-system-clusters-alice
-      googlepubsub:
-        projectId: hcm-hyperfleet
-
-  # Landing Zone Adapter - subscribes to hyperfleet-system-clusters-alice
-  landing-zone:
-    serviceAccount:
-      create: true
-      name: landing-zone-adapter
-      annotations:
-        iam.gke.io/gcp-service-account: landing-zone-alice@hcm-hyperfleet.iam.gserviceaccount.com
-    broker:
-      type: googlepubsub
-      googlepubsub:
-        projectId: hcm-hyperfleet
-        topic: hyperfleet-system-clusters-alice
-        subscription: hyperfleet-system-clusters-landing-zone-adapter-alice
-        deadLetterTopic: hyperfleet-system-clusters-alice-dlq
-
-  # Disable RabbitMQ when using Pub/Sub
-  rabbitmq:
-    enabled: false
-
-# GCP Validation Adapter (GCP overlay chart component - NOT under base:)
-# Subscribes to hyperfleet-system-clusters-alice
-validation-gcp:
-  enabled: true
-  serviceAccount:
-    create: true
-    name: validation-gcp-adapter
-    annotations:
-      iam.gke.io/gcp-service-account: validation-gcp-alice@hcm-hyperfleet.iam.gserviceaccount.com
-  broker:
-    type: googlepubsub
-    googlepubsub:
-      projectId: hcm-hyperfleet
-      topic: hyperfleet-system-clusters-alice
-      subscription: hyperfleet-system-clusters-validation-gcp-adapter-alice
-      deadLetterTopic: hyperfleet-system-clusters-alice-dlq
-```
+Use the `pubsub_config` output to construct your Helm values. See [examples/gcp-pubsub/values.yaml](https://github.com/openshift-hyperfleet/hyperfleet-chart/blob/main/examples/gcp-pubsub/values.yaml) in the hyperfleet-chart repository for a complete example.
 
 **Chart Structure Note**: The hyperfleet-gcp chart uses a base + overlay pattern:
 - `base:` - Core platform components (API, Sentinel, Landing Zone, RabbitMQ)

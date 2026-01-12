@@ -57,24 +57,6 @@ locals {
     ]...)
   ]...)
 
-  # For Helm values output: get first topic (alphabetically) for sentinel
-  # Returns null if no topics configured (defensive check)
-  first_topic_name = length(local.topics) > 0 ? sort(keys(local.topics))[0] : null
-
-  # For Helm values output: find topic that has landing-zone adapter subscription
-  landing_zone_topics = [
-    for topic_name, topic_config in local.topics :
-    topic_name if contains(keys(topic_config.adapter_subscriptions), "landing-zone")
-  ]
-  landing_zone_topic = length(local.landing_zone_topics) > 0 ? local.landing_zone_topics[0] : null
-
-  # For Helm values output: find topic that has validation-gcp adapter subscription
-  validation_gcp_topics = [
-    for topic_name, topic_config in local.topics :
-    topic_name if contains(keys(topic_config.adapter_subscriptions), "validation-gcp")
-  ]
-  validation_gcp_topic = length(local.validation_gcp_topics) > 0 ? local.validation_gcp_topics[0] : null
-
   common_labels = merge(var.labels, {
     managed-by = "terraform"
     component  = "hyperfleet-pubsub"
