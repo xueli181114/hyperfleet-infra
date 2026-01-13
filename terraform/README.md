@@ -345,6 +345,12 @@ nodepools-validation-gcp-adapter:
 
 **Note**: While each topic has a separate Helm configuration section (e.g., `clusters-sentinel`, `nodepools-sentinel`), they all use the **same** Kubernetes service account (`sentinel`). This single Kubernetes service account has permission to publish to all topics via Workload Identity Federation. No GCP service accounts are created - permissions are granted directly to Kubernetes service accounts. Adapter service configurations are grouped by the topic they subscribe to for clarity.
 
+**Chart Structure Note**: The hyperfleet-gcp chart uses a base + overlay pattern:
+- `base:` - Core platform components (API, Sentinel, Landing Zone, RabbitMQ)
+- Root level - GCP-specific components (validation-gcp)
+
+When constructing your values file, sentinel and landing-zone configs go under the `base:` prefix while validation-gcp stays at root level. See the [hyperfleet-chart README](https://github.com/openshift-hyperfleet/hyperfleet-chart) for full documentation.
+
 ## Directory Structure
 
 ```
