@@ -7,6 +7,7 @@
 #
 # Prerequisites:
 # - gcloud CLI installed and authenticated
+# - jq installed (for IAM policy merging)
 # - Permissions: roles/storage.admin or equivalent on the project
 #
 # Usage:
@@ -52,6 +53,22 @@ error() {
 # Main
 # =============================================================================
 log "Setting up Terraform backend for project: $PROJECT_ID"
+echo
+
+# Check dependencies
+log "Checking dependencies"
+if ! command -v gcloud &>/dev/null; then
+    error "gcloud CLI is not installed or not in PATH"
+    echo "  Install from: https://cloud.google.com/sdk/docs/install"
+    exit 1
+fi
+
+if ! command -v jq &>/dev/null; then
+    error "jq is not installed or not in PATH"
+    echo "  Install from: https://jqlang.github.io/jq/download/"
+    exit 1
+fi
+success "All dependencies found"
 echo
 
 # Set active project
@@ -116,12 +133,9 @@ REQUIRED_BINDINGS='[
 # Merge current policy with required bindings using jq
 # This preserves existing bindings and adds/updates only what we need
 MERGED_POLICY=$(echo "$CURRENT_POLICY" | jq --argjson required "$REQUIRED_BINDINGS" '
-  # Create a map of existing bindings by role
-  .bindings as $existing |
-
-  # Process each required binding
+  # Process each required binding while preserving top-level metadata (etag, version)
   reduce $required[] as $req (
-    {bindings: $existing};
+    .;
 
     # Find if this role already exists
     (.bindings | map(.role == $req.role) | index(true)) as $idx |
