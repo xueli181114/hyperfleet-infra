@@ -94,18 +94,15 @@ kubectl get nodes
 terraform output
 ```
 
-### Using Shared Configuration
+### Using Long-running Reserved Cluster Used for Prow
 
-For shared environment configuration, use `dev-shared.tfvars` in addition to your personal tfvars:
+For the long-running reserved cluster used for Prow, use the dedicated `dev-prow.tfvars` configuration:
 
 ```bash
-# Apply with both shared and personal configuration
-terraform apply \
-  -var-file=envs/gke/dev-shared.tfvars \
-  -var-file=envs/gke/dev-<username>.tfvars
+# Initialize and apply Prow cluster configuration
+terraform init -backend-config=envs/gke/dev-prow.tfbackend
+terraform apply -var-file=envs/gke/dev-prow.tfvars
 ```
-
-Personal tfvars override shared values, so you can customize specific settings while inheriting common defaults.
 
 ## Remote Backend Setup
 

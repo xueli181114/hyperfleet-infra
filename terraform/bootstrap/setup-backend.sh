@@ -26,14 +26,24 @@ STORAGE_CLASS="STANDARD"
 # =============================================================================
 # Functions
 # =============================================================================
+
+# Prints an informational message with blue arrow prefix
+# Arguments:
+#   $* - Message text to display
 log() {
     echo -e "\033[1;34m==>\033[0m $*"
 }
 
+# Prints a success message with green checkmark prefix
+# Arguments:
+#   $* - Success message text to display
 success() {
     echo -e "\033[1;32m✓\033[0m $*"
 }
 
+# Prints an error message with red X prefix to stderr
+# Arguments:
+#   $* - Error message text to display
 error() {
     echo -e "\033[1;31m✗\033[0m $*" >&2
 }
@@ -170,9 +180,12 @@ echo "Next steps:"
 echo "  1. Grant individual team members IAM permissions for GCP resources"
 echo "     (see terraform/README.md#team-member-setup)"
 echo "     Note: Project owners/editors already have bucket access"
-echo "  2. Initialize Terraform with the backend:"
+echo "  2. Create your backend configuration file:"
 echo "     cd terraform"
-echo "     terraform init -backend-config=\"prefix=terraform/state/dev-<your-name>\""
+echo "     cp envs/gke/dev.tfbackend.example envs/gke/dev-<your-name>.tfbackend"
+echo "     # Edit dev-<your-name>.tfbackend to set your prefix"
+echo "  3. Initialize Terraform with the backend:"
+echo "     terraform init -backend-config=envs/gke/dev-<your-name>.tfbackend"
 echo
 echo "For shared environments (e.g., Prow cluster):"
 echo "     terraform init -backend-config=envs/gke/dev-prow.tfbackend"
