@@ -1,6 +1,8 @@
 # HyperFleet CLM - Full Installation Makefile
 # Usage: make help
 
+.DEFAULT_GOAL := help
+
 NAMESPACE        ?= hyperfleet
 MAESTRO_NS       ?= maestro
 KUBECONFIG       ?= $(HOME)/.kube/config
@@ -9,6 +11,7 @@ TF_BACKEND       ?= envs/gke/$(TF_ENV).tfbackend
 TF_VARS          ?= envs/gke/$(TF_ENV).tfvars
 GCP_PROJECT_ID   ?= hcm-hyperfleet
 BROKER_TYPE      ?= googlepubsub
+RABBITMQ_URL     ?= amqp://guest:guest@rabbitmq:5672/
 REGISTRY         ?= quay.io/openshift-hyperfleet
 IMAGE_TAG        ?= v0.1.0
 API_TAG          ?= $(IMAGE_TAG)
@@ -67,8 +70,10 @@ get-credentials: check-terraform ## Configure kubectl credentials from Terraform
 	@echo "OK: kubectl configured"
 
 .PHONY: tf-helm-values
-tf-helm-values: check-terraform ## Generate Helm override values from Terraform outputs
-	./scripts/tf-helm-values.sh --tf-dir $(TF_DIR) --out-dir $(GENERATED_DIR) --broker-type $(BROKER_TYPE)
+tf-helm-values: $(if $(filter googlepubsub,$(BROKER_TYPE)),check-terraform) ## Generate Helm override values (from Terraform for googlepubsub, from variables for rabbitmq)
+	./scripts/tf-helm-values.sh --out-dir $(GENERATED_DIR) --broker-type $(BROKER_TYPE) \
+		$(if $(filter googlepubsub,$(BROKER_TYPE)),--tf-dir $(TF_DIR)) \
+		$(if $(filter rabbitmq,$(BROKER_TYPE)),--rabbitmq-url $(RABBITMQ_URL) --namespace $(NAMESPACE))
 
 .PHONY: clean-generated
 clean-generated: ## Remove generated Helm values
@@ -80,6 +85,14 @@ clean-generated: ## Remove generated Helm values
 # ──────────────────────────────────────────────
 
 MAESTRO_CONSUMER ?= cluster1
+MANIFESTS_DIR    := manifests
+
+.PHONY: install-rabbitmq
+install-rabbitmq: check-kubectl check-namespace ## Install RabbitMQ (dev only, for BROKER_TYPE=rabbitmq)
+	kubectl apply -f $(MANIFESTS_DIR)/rabbitmq.yaml --namespace $(NAMESPACE) --kubeconfig $(KUBECONFIG)
+	@echo "Waiting for RabbitMQ to be ready..."
+	@kubectl wait --for=condition=ready pod -l app=rabbitmq --namespace $(NAMESPACE) --kubeconfig $(KUBECONFIG) --timeout=120s
+	@echo "OK: RabbitMQ is ready"
 
 .PHONY: install-maestro
 install-maestro: check-helm check-kubectl check-maestro-namespace ## Install Maestro (server + agent)
@@ -193,11 +206,19 @@ install-adapters: install-adapter1 install-adapter2 install-adapter3 ## Install 
 install-hyperfleet: install-api install-sentinels install-adapters ## Install API + sentinels + adapters (no maestro, no terraform)
 
 .PHONY: install-all
-install-all: install-terraform get-credentials tf-helm-values install-maestro create-maestro-consumer install-hyperfleet ## Install everything (terraform + hyperfleet + maestro)
+install-all: install-terraform get-credentials tf-helm-values install-maestro create-maestro-consumer install-hyperfleet ## Full GCP install (terraform + googlepubsub + hyperfleet + maestro)
+
+.PHONY: install-all-rabbitmq
+install-all-rabbitmq: BROKER_TYPE = rabbitmq
+install-all-rabbitmq: install-rabbitmq tf-helm-values install-hyperfleet install-maestro create-maestro-consumer ## Full RabbitMQ install (rabbitmq + hyperfleet + maestro, no terraform)
 
 # ──────────────────────────────────────────────
 # Uninstall targets
 # ──────────────────────────────────────────────
+
+.PHONY: uninstall-rabbitmq
+uninstall-rabbitmq: check-kubectl ## Uninstall RabbitMQ
+	kubectl delete -f $(MANIFESTS_DIR)/rabbitmq.yaml --namespace $(NAMESPACE) --kubeconfig $(KUBECONFIG) --ignore-not-found
 
 .PHONY: uninstall-maestro
 uninstall-maestro: ## Uninstall Maestro
@@ -264,7 +285,8 @@ help: ## Print available targets
 	@echo "  KUBECONFIG       Path to kubeconfig (default: ~/.kube/config)"
 	@echo "  TF_ENV           Terraform environment (default: dev)"
 	@echo "  GCP_PROJECT_ID   GCP project ID (default: hcm-hyperfleet)"
-	@echo "  BROKER_TYPE      Message broker type (default: googlepubsub)"
+	@echo "  BROKER_TYPE      Message broker type: googlepubsub or rabbitmq (default: googlepubsub)"
+	@echo "  RABBITMQ_URL     RabbitMQ connection URL (default: amqp://guest:guest@rabbitmq:5672/)"
 	@echo "  REGISTRY         Override image registry for all components (e.g. quay.io/myuser)"
 	@echo "  IMAGE_TAG        Default image tag for all components (default: v0.1.0)"
 	@echo "  API_TAG          Override image tag for API (default: IMAGE_TAG)"

@@ -19,4 +19,8 @@ sentinel:
     topic: CHANGE_THIS
     googlepubsub:
       # make install will substitute this by data coming from terraform
-      projectId: CHANGE_THIS 
+      projectId: CHANGE_THIS
+    rabbitmq:
+      # make install will substitute this by data coming from tf-helm-values.sh
+      url: CHANGE_THIS
+      exchangeType: topic
