@@ -111,7 +111,7 @@ install-maestro: check-helm check-kubectl check-maestro-namespace ## Install Mae
 	helm dependency update $(HELM_DIR)/maestro
 	@echo "Installing Maestro..."
 	
-	if ! helm upgrade --install $(DRY_RUN) $(MAESTRO_NS)-maestro $(HELM_DIR)/maestro \
+	if ! helm upgrade --install $(if $(DRY_RUN),$(DRY_RUN)) $(MAESTRO_NS)-maestro $(HELM_DIR)/maestro \
 		--namespace $(MAESTRO_NS) \
 		--kubeconfig $(KUBECONFIG) \
 		--set agent.messageBroker.mqtt.host=maestro-mqtt.$(MAESTRO_NS) \
@@ -149,7 +149,7 @@ endef
 install-api: check-helm check-kubectl check-namespace ## Install HyperFleet API
 	$(call set-chart-ref,$(HELM_DIR)/api,$(API_CHART_REF))
 	helm dependency update $(HELM_DIR)/api
-	helm upgrade --install $(DRY_RUN) $(NAMESPACE)-api $(HELM_DIR)/api \
+	helm upgrade --install $(if $(DRY_RUN),$(DRY_RUN)) $(NAMESPACE)-api $(HELM_DIR)/api \
 		--namespace $(NAMESPACE) \
 		--kubeconfig $(KUBECONFIG) \
 		$(if $(REGISTRY),--set hyperfleet-api.image.registry=$(REGISTRY)) \
@@ -159,7 +159,7 @@ install-api: check-helm check-kubectl check-namespace ## Install HyperFleet API
 install-sentinel-clusters: check-helm check-kubectl check-namespace ## Install Sentinel for clusters
 	$(call set-chart-ref,$(HELM_DIR)/sentinel-clusters,$(SENTINEL_CHART_REF))
 	helm dependency update $(HELM_DIR)/sentinel-clusters
-	helm upgrade --install $(DRY_RUN) $(NAMESPACE)-sentinel-clusters $(HELM_DIR)/sentinel-clusters \
+	helm upgrade --install $(if $(DRY_RUN),$(DRY_RUN)) $(NAMESPACE)-sentinel-clusters $(HELM_DIR)/sentinel-clusters \
 		--namespace $(NAMESPACE) \
 		--kubeconfig $(KUBECONFIG) \
 		--set sentinel.broker.type=$(BROKER_TYPE) \
@@ -171,7 +171,7 @@ install-sentinel-clusters: check-helm check-kubectl check-namespace ## Install S
 install-sentinel-nodepools: check-helm check-kubectl check-namespace ## Install Sentinel for nodepools
 	$(call set-chart-ref,$(HELM_DIR)/sentinel-nodepools,$(SENTINEL_CHART_REF))
 	helm dependency update $(HELM_DIR)/sentinel-nodepools
-	helm upgrade --install $(DRY_RUN) $(NAMESPACE)-sentinel-nodepools $(HELM_DIR)/sentinel-nodepools \
+	helm upgrade --install $(if $(DRY_RUN),$(DRY_RUN)) $(NAMESPACE)-sentinel-nodepools $(HELM_DIR)/sentinel-nodepools \
 		--namespace $(NAMESPACE) \
 		--kubeconfig $(KUBECONFIG) \
 		--set sentinel.broker.type=$(BROKER_TYPE) \
@@ -183,7 +183,7 @@ install-sentinel-nodepools: check-helm check-kubectl check-namespace ## Install 
 install-adapter1: check-helm check-kubectl check-namespace ## Install adapter1
 	$(call set-chart-ref,$(HELM_DIR)/adapter1,$(ADAPTER_CHART_REF))
 	helm dependency update $(HELM_DIR)/adapter1
-	helm upgrade --install $(DRY_RUN) $(NAMESPACE)-adapter1 $(HELM_DIR)/adapter1 \
+	helm upgrade --install $(if $(DRY_RUN),$(DRY_RUN)) $(NAMESPACE)-adapter1 $(HELM_DIR)/adapter1 \
 		--namespace $(NAMESPACE) \
 		--kubeconfig $(KUBECONFIG) \
 		--set hyperfleet-adapter.broker.type=$(BROKER_TYPE) \
@@ -197,7 +197,7 @@ install-adapter1: check-helm check-kubectl check-namespace ## Install adapter1
 install-adapter2: check-helm check-kubectl check-namespace ## Install adapter2
 	$(call set-chart-ref,$(HELM_DIR)/adapter2,$(ADAPTER_CHART_REF))
 	helm dependency update $(HELM_DIR)/adapter2
-	helm upgrade --install $(DRY_RUN) $(NAMESPACE)-adapter2 $(HELM_DIR)/adapter2 \
+	helm upgrade --install $(if $(DRY_RUN),$(DRY_RUN)) $(NAMESPACE)-adapter2 $(HELM_DIR)/adapter2 \
 		--namespace $(NAMESPACE) \
 		--kubeconfig $(KUBECONFIG) \
 		--set hyperfleet-adapter.broker.type=$(BROKER_TYPE) \
@@ -211,7 +211,7 @@ install-adapter2: check-helm check-kubectl check-namespace ## Install adapter2
 install-adapter3: check-helm check-kubectl check-namespace ## Install adapter3
 	$(call set-chart-ref,$(HELM_DIR)/adapter3,$(ADAPTER_CHART_REF))
 	helm dependency update $(HELM_DIR)/adapter3
-	helm upgrade --install $(DRY_RUN) $(NAMESPACE)-adapter3 $(HELM_DIR)/adapter3 \
+	helm upgrade --install $(if $(DRY_RUN),$(DRY_RUN)) $(NAMESPACE)-adapter3 $(HELM_DIR)/adapter3 \
 		--namespace $(NAMESPACE) \
 		--kubeconfig $(KUBECONFIG) \
 		--set hyperfleet-adapter.broker.type=$(BROKER_TYPE) \
@@ -341,7 +341,9 @@ validate-helm-charts: check-helm ## Render all Helm charts with helm template (n
 	@echo "OK: all Helm charts rendered successfully"
 
 .PHONY: ci-dry-run
-ci-dry-run: ci-validate validate-helm-charts ## Layer 2: Static + dry-run validation (no credentials required)
+ci-dry-run: ci-validate ## Layer 2: Static + dry-run validation (no credentials required)
+	$(MAKE) validate-helm-charts BROKER_TYPE=rabbitmq
+	$(MAKE) validate-helm-charts BROKER_TYPE=googlepubsub
 
 # --- Layer 3: Full integration test ---
 
