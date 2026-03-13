@@ -18,6 +18,9 @@ SENTINEL_IMAGE_TAG ?= v0.1.1
 ADAPTER_IMAGE_TAG  ?= v0.1.1
 DRY_RUN            ?=
 AUTO_APPROVE       ?=
+# Derived flags from boolean variables
+DRY_RUN_FLAG     := $(if $(DRY_RUN),--dry-run)
+AUTO_APPROVE_FLAG := $(if $(AUTO_APPROVE),-auto-approve)
 
 # Chart source configuration (helm-git plugin)
 # Chart refs are independent of image tags so that overriding an image tag
@@ -111,7 +114,7 @@ install-maestro: check-helm check-kubectl check-maestro-namespace ## Install Mae
 	helm dependency update $(HELM_DIR)/maestro
 	@echo "Installing Maestro..."
 	
-	if ! helm upgrade --install $(if $(DRY_RUN),$(DRY_RUN)) $(MAESTRO_NS)-maestro $(HELM_DIR)/maestro \
+	if ! helm upgrade --install $(DRY_RUN_FLAG) $(MAESTRO_NS)-maestro $(HELM_DIR)/maestro \
 		--namespace $(MAESTRO_NS) \
 		--kubeconfig $(KUBECONFIG) \
 		--set agent.messageBroker.mqtt.host=maestro-mqtt.$(MAESTRO_NS) \
@@ -149,7 +152,7 @@ endef
 install-api: check-helm check-kubectl check-namespace ## Install HyperFleet API
 	$(call set-chart-ref,$(HELM_DIR)/api,$(API_CHART_REF))
 	helm dependency update $(HELM_DIR)/api
-	helm upgrade --install $(if $(DRY_RUN),$(DRY_RUN)) $(NAMESPACE)-api $(HELM_DIR)/api \
+	helm upgrade --install $(DRY_RUN_FLAG) $(NAMESPACE)-api $(HELM_DIR)/api \
 		--namespace $(NAMESPACE) \
 		--kubeconfig $(KUBECONFIG) \
 		$(if $(REGISTRY),--set hyperfleet-api.image.registry=$(REGISTRY)) \
@@ -159,7 +162,7 @@ install-api: check-helm check-kubectl check-namespace ## Install HyperFleet API
 install-sentinel-clusters: check-helm check-kubectl check-namespace ## Install Sentinel for clusters
 	$(call set-chart-ref,$(HELM_DIR)/sentinel-clusters,$(SENTINEL_CHART_REF))
 	helm dependency update $(HELM_DIR)/sentinel-clusters
-	helm upgrade --install $(if $(DRY_RUN),$(DRY_RUN)) $(NAMESPACE)-sentinel-clusters $(HELM_DIR)/sentinel-clusters \
+	helm upgrade --install $(DRY_RUN_FLAG) $(NAMESPACE)-sentinel-clusters $(HELM_DIR)/sentinel-clusters \
 		--namespace $(NAMESPACE) \
 		--kubeconfig $(KUBECONFIG) \
 		--set sentinel.broker.type=$(BROKER_TYPE) \
@@ -171,7 +174,7 @@ install-sentinel-clusters: check-helm check-kubectl check-namespace ## Install S
 install-sentinel-nodepools: check-helm check-kubectl check-namespace ## Install Sentinel for nodepools
 	$(call set-chart-ref,$(HELM_DIR)/sentinel-nodepools,$(SENTINEL_CHART_REF))
 	helm dependency update $(HELM_DIR)/sentinel-nodepools
-	helm upgrade --install $(if $(DRY_RUN),$(DRY_RUN)) $(NAMESPACE)-sentinel-nodepools $(HELM_DIR)/sentinel-nodepools \
+	helm upgrade --install $(DRY_RUN_FLAG) $(NAMESPACE)-sentinel-nodepools $(HELM_DIR)/sentinel-nodepools \
 		--namespace $(NAMESPACE) \
 		--kubeconfig $(KUBECONFIG) \
 		--set sentinel.broker.type=$(BROKER_TYPE) \
@@ -183,7 +186,7 @@ install-sentinel-nodepools: check-helm check-kubectl check-namespace ## Install 
 install-adapter1: check-helm check-kubectl check-namespace ## Install adapter1
 	$(call set-chart-ref,$(HELM_DIR)/adapter1,$(ADAPTER_CHART_REF))
 	helm dependency update $(HELM_DIR)/adapter1
-	helm upgrade --install $(if $(DRY_RUN),$(DRY_RUN)) $(NAMESPACE)-adapter1 $(HELM_DIR)/adapter1 \
+	helm upgrade --install $(DRY_RUN_FLAG) $(NAMESPACE)-adapter1 $(HELM_DIR)/adapter1 \
 		--namespace $(NAMESPACE) \
 		--kubeconfig $(KUBECONFIG) \
 		--set hyperfleet-adapter.broker.type=$(BROKER_TYPE) \
@@ -197,7 +200,7 @@ install-adapter1: check-helm check-kubectl check-namespace ## Install adapter1
 install-adapter2: check-helm check-kubectl check-namespace ## Install adapter2
 	$(call set-chart-ref,$(HELM_DIR)/adapter2,$(ADAPTER_CHART_REF))
 	helm dependency update $(HELM_DIR)/adapter2
-	helm upgrade --install $(if $(DRY_RUN),$(DRY_RUN)) $(NAMESPACE)-adapter2 $(HELM_DIR)/adapter2 \
+	helm upgrade --install $(DRY_RUN_FLAG) $(NAMESPACE)-adapter2 $(HELM_DIR)/adapter2 \
 		--namespace $(NAMESPACE) \
 		--kubeconfig $(KUBECONFIG) \
 		--set hyperfleet-adapter.broker.type=$(BROKER_TYPE) \
@@ -211,7 +214,7 @@ install-adapter2: check-helm check-kubectl check-namespace ## Install adapter2
 install-adapter3: check-helm check-kubectl check-namespace ## Install adapter3
 	$(call set-chart-ref,$(HELM_DIR)/adapter3,$(ADAPTER_CHART_REF))
 	helm dependency update $(HELM_DIR)/adapter3
-	helm upgrade --install $(if $(DRY_RUN),$(DRY_RUN)) $(NAMESPACE)-adapter3 $(HELM_DIR)/adapter3 \
+	helm upgrade --install $(DRY_RUN_FLAG) $(NAMESPACE)-adapter3 $(HELM_DIR)/adapter3 \
 		--namespace $(NAMESPACE) \
 		--kubeconfig $(KUBECONFIG) \
 		--set hyperfleet-adapter.broker.type=$(BROKER_TYPE) \
@@ -224,7 +227,7 @@ install-adapter3: check-helm check-kubectl check-namespace ## Install adapter3
 .PHONY: install-terraform
 install-terraform: check-terraform check-tf-files ## Run Terraform init and apply
 	cd $(TF_DIR) && terraform init -backend-config=$(TF_BACKEND)
-	cd $(TF_DIR) && terraform apply -var-file=$(TF_VARS) $(AUTO_APPROVE)
+	cd $(TF_DIR) && terraform apply -var-file=$(TF_VARS) $(AUTO_APPROVE_FLAG)
 
 # ──────────────────────────────────────────────
 # Aggregate install targets
@@ -254,9 +257,10 @@ install-all-rabbitmq: install-rabbitmq tf-helm-values install-hyperfleet install
 
 .PHONY: validate-terraform
 validate-terraform: check-terraform ## Validate Terraform syntax and formatting
-	cd $(TF_DIR) && terraform init -backend=false
-	cd $(TF_DIR) && terraform fmt -check -recursive -diff
-	cd $(TF_DIR) && terraform validate
+	cd $(TF_DIR) && \
+		terraform init -backend=false && \
+		terraform fmt -check -recursive -diff && \
+		terraform validate
 
 .PHONY: lint-helm
 lint-helm: check-helm deps ## Lint all Helm charts
@@ -285,55 +289,52 @@ plan-terraform: check-terraform check-tf-files ## Run terraform plan (preview on
 	cd $(TF_DIR) && terraform init -backend-config=$(TF_BACKEND)
 	cd $(TF_DIR) && terraform plan -var-file=$(TF_VARS)
 
+# validate-chart: validate a single Helm chart with helm template
+# Usage: $(call validate-chart,<chart-name>,<chart-ref>,<helm-template-args>)
+define validate-chart
+	$(call set-chart-ref,$(HELM_DIR)/$(1),$(2))
+	helm dependency update $(HELM_DIR)/$(1)
+	@echo "Validating $(1) chart..."
+	helm template $(NAMESPACE)-$(1) $(HELM_DIR)/$(1) $(3) > /dev/null
+endef
+
 .PHONY: validate-helm-charts
 validate-helm-charts: check-helm ## Render all Helm charts with helm template (no cluster required)
-	$(call set-chart-ref,$(HELM_DIR)/api,$(API_CHART_REF))
-	helm dependency update $(HELM_DIR)/api
-	@echo "Validating api chart..."
-	helm template $(NAMESPACE)-api $(HELM_DIR)/api \
+	$(call validate-chart,api,$(API_CHART_REF),\
 		$(if $(REGISTRY),--set hyperfleet-api.image.registry=$(REGISTRY)) \
-		--set hyperfleet-api.image.tag=$(API_IMAGE_TAG) > /dev/null
-	$(call set-chart-ref,$(HELM_DIR)/sentinel-clusters,$(SENTINEL_CHART_REF))
-	helm dependency update $(HELM_DIR)/sentinel-clusters
-	@echo "Validating sentinel-clusters chart..."
-	helm template $(NAMESPACE)-sentinel-clusters $(HELM_DIR)/sentinel-clusters \
+		--set hyperfleet-api.image.tag=$(API_IMAGE_TAG))
+
+	$(call validate-chart,sentinel-clusters,$(SENTINEL_CHART_REF),\
 		--set sentinel.broker.type=$(BROKER_TYPE) \
 		$(if $(REGISTRY),--set sentinel.image.registry=$(REGISTRY)) \
-		--set sentinel.image.tag=$(SENTINEL_IMAGE_TAG) > /dev/null
-	$(call set-chart-ref,$(HELM_DIR)/sentinel-nodepools,$(SENTINEL_CHART_REF))
-	helm dependency update $(HELM_DIR)/sentinel-nodepools
-	@echo "Validating sentinel-nodepools chart..."
-	helm template $(NAMESPACE)-sentinel-nodepools $(HELM_DIR)/sentinel-nodepools \
+		--set sentinel.image.tag=$(SENTINEL_IMAGE_TAG))
+
+	$(call validate-chart,sentinel-nodepools,$(SENTINEL_CHART_REF),\
 		--set sentinel.broker.type=$(BROKER_TYPE) \
 		$(if $(REGISTRY),--set sentinel.image.registry=$(REGISTRY)) \
-		--set sentinel.image.tag=$(SENTINEL_IMAGE_TAG) > /dev/null
-	$(call set-chart-ref,$(HELM_DIR)/adapter1,$(ADAPTER_CHART_REF))
-	helm dependency update $(HELM_DIR)/adapter1
-	@echo "Validating adapter1 chart..."
-	helm template $(NAMESPACE)-adapter1 $(HELM_DIR)/adapter1 \
+		--set sentinel.image.tag=$(SENTINEL_IMAGE_TAG))
+
+	$(call validate-chart,adapter1,$(ADAPTER_CHART_REF),\
 		--set hyperfleet-adapter.broker.type=$(BROKER_TYPE) \
 		$(if $(REGISTRY),--set hyperfleet-adapter.image.registry=$(REGISTRY)) \
 		--set hyperfleet-adapter.image.tag=$(ADAPTER_IMAGE_TAG) \
 		--set-file hyperfleet-adapter.adapterConfig.yaml=$(HELM_DIR)/adapter1/adapter-config.yaml \
-		--set-file hyperfleet-adapter.adapterTaskConfig.yaml=$(HELM_DIR)/adapter1/adapter-task-config.yaml > /dev/null
-	$(call set-chart-ref,$(HELM_DIR)/adapter2,$(ADAPTER_CHART_REF))
-	helm dependency update $(HELM_DIR)/adapter2
-	@echo "Validating adapter2 chart..."
-	helm template $(NAMESPACE)-adapter2 $(HELM_DIR)/adapter2 \
+		--set-file hyperfleet-adapter.adapterTaskConfig.yaml=$(HELM_DIR)/adapter1/adapter-task-config.yaml)
+
+	$(call validate-chart,adapter2,$(ADAPTER_CHART_REF),\
 		--set hyperfleet-adapter.broker.type=$(BROKER_TYPE) \
 		$(if $(REGISTRY),--set hyperfleet-adapter.image.registry=$(REGISTRY)) \
 		--set hyperfleet-adapter.image.tag=$(ADAPTER_IMAGE_TAG) \
 		--set-file hyperfleet-adapter.adapterConfig.yaml=$(HELM_DIR)/adapter2/adapter-config.yaml \
-		--set-file hyperfleet-adapter.adapterTaskConfig.yaml=$(HELM_DIR)/adapter2/adapter-task-config.yaml > /dev/null
-	$(call set-chart-ref,$(HELM_DIR)/adapter3,$(ADAPTER_CHART_REF))
-	helm dependency update $(HELM_DIR)/adapter3
-	@echo "Validating adapter3 chart..."
-	helm template $(NAMESPACE)-adapter3 $(HELM_DIR)/adapter3 \
+		--set-file hyperfleet-adapter.adapterTaskConfig.yaml=$(HELM_DIR)/adapter2/adapter-task-config.yaml)
+
+	$(call validate-chart,adapter3,$(ADAPTER_CHART_REF),\
 		--set hyperfleet-adapter.broker.type=$(BROKER_TYPE) \
 		$(if $(REGISTRY),--set hyperfleet-adapter.image.registry=$(REGISTRY)) \
 		--set hyperfleet-adapter.image.tag=$(ADAPTER_IMAGE_TAG) \
 		--set-file hyperfleet-adapter.adapterConfig.yaml=$(HELM_DIR)/adapter3/adapter-config.yaml \
-		--set-file hyperfleet-adapter.adapterTaskConfig.yaml=$(HELM_DIR)/adapter3/adapter-task-config.yaml > /dev/null
+		--set-file hyperfleet-adapter.adapterTaskConfig.yaml=$(HELM_DIR)/adapter3/adapter-task-config.yaml)
+
 	helm dependency update $(HELM_DIR)/maestro
 	@echo "Validating maestro chart..."
 	helm template $(MAESTRO_NS)-maestro $(HELM_DIR)/maestro \
@@ -451,8 +452,8 @@ help: ## Print available targets
 	@echo "  SENTINEL_CHART_REF Git ref for sentinel helm chart source (default: SENTINEL_IMAGE_TAG)"
 	@echo "  ADAPTER_CHART_REF  Git ref for adapter helm chart source (default: ADAPTER_IMAGE_TAG)"
 	@echo "  MAESTRO_CONSUMER Maestro consumer name (default: cluster1)"
-	@echo "  DRY_RUN          Set to --dry-run for Helm dry-run mode (default: empty)"
-	@echo "  AUTO_APPROVE     Set to -auto-approve for non-interactive Terraform (default: empty)"
+	@echo "  DRY_RUN          Set to any value (e.g., true) for Helm dry-run mode (default: empty)"
+	@echo "  AUTO_APPROVE     Set to any value (e.g., true) for non-interactive Terraform (default: empty)"
 	@echo ""
 	@echo "Targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-28s\033[0m %s\n", $$1, $$2}'
