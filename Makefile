@@ -12,10 +12,10 @@ TF_VARS          ?= envs/gke/$(TF_ENV).tfvars
 GCP_PROJECT_ID   ?= hcm-hyperfleet
 BROKER_TYPE      ?= googlepubsub
 RABBITMQ_URL     ?= amqp://guest:guest@rabbitmq:5672/
-REGISTRY         ?= quay.io/openshift-hyperfleet
-API_IMAGE_TAG      ?= v0.1.1
-SENTINEL_IMAGE_TAG ?= v0.1.1
-ADAPTER_IMAGE_TAG  ?= v0.1.1
+REGISTRY         ?= registry.ci.openshift.org/ci
+API_IMAGE_TAG      ?= latest
+SENTINEL_IMAGE_TAG ?= latest
+ADAPTER_IMAGE_TAG  ?= latest
 DRY_RUN            ?=
 AUTO_APPROVE       ?=
 # Derived flags from boolean variables (only true/1 are treated as truthy)
@@ -30,9 +30,9 @@ AUTO_APPROVE_FLAG := $(if $(filter $(TRUTHY_VALUES),$(strip $(AUTO_APPROVE))),-a
 #   make install-adapter1 ADAPTER_CHART_REF=main
 #   make install-adapter1 CHART_ORG=myuser
 CHART_ORG          ?= openshift-hyperfleet
-API_CHART_REF      ?= v0.1.1
-SENTINEL_CHART_REF ?= v0.1.1
-ADAPTER_CHART_REF  ?= v0.1.1
+API_CHART_REF      ?= main
+SENTINEL_CHART_REF ?= main
+ADAPTER_CHART_REF  ?= main
 
 HELM_DIR         := helm
 TF_DIR           ?= terraform
@@ -444,14 +444,14 @@ help: ## Print available targets
 	@echo "  GCP_PROJECT_ID   GCP project ID (default: hcm-hyperfleet)"
 	@echo "  BROKER_TYPE      Message broker type: googlepubsub or rabbitmq (default: googlepubsub)"
 	@echo "  RABBITMQ_URL     RabbitMQ connection URL (default: amqp://guest:guest@rabbitmq:5672/)"
-	@echo "  REGISTRY         Override image registry for all components (e.g. quay.io/myuser)"
-	@echo "  API_IMAGE_TAG      Image tag for API (default: v0.1.1)"
-	@echo "  SENTINEL_IMAGE_TAG Image tag for sentinels (default: v0.1.1)"
-	@echo "  ADAPTER_IMAGE_TAG  Image tag for adapters (default: v0.1.1)"
+	@echo "  REGISTRY         Override image registry for all components (default: registry.ci.openshift.org/ci)"
+	@echo "  API_IMAGE_TAG      Image tag for API (default: latest)"
+	@echo "  SENTINEL_IMAGE_TAG Image tag for sentinels (default: latest)"
+	@echo "  ADAPTER_IMAGE_TAG  Image tag for adapters (default: latest)"
 	@echo "  CHART_ORG          GitHub org for helm chart repos (default: openshift-hyperfleet)"
-	@echo "  API_CHART_REF      Git ref for API helm chart source (default: API_IMAGE_TAG)"
-	@echo "  SENTINEL_CHART_REF Git ref for sentinel helm chart source (default: SENTINEL_IMAGE_TAG)"
-	@echo "  ADAPTER_CHART_REF  Git ref for adapter helm chart source (default: ADAPTER_IMAGE_TAG)"
+	@echo "  API_CHART_REF      Git ref for API helm chart source (default: main)"
+	@echo "  SENTINEL_CHART_REF Git ref for sentinel helm chart source (default: main)"
+	@echo "  ADAPTER_CHART_REF  Git ref for adapter helm chart source (default: main)"
 	@echo "  MAESTRO_CONSUMER Maestro consumer name (default: cluster1)"
 	@echo "  DRY_RUN          Set to true or 1 for Helm dry-run mode (default: empty)"
 	@echo "  AUTO_APPROVE     Set to true or 1 for non-interactive Terraform (default: empty)"
