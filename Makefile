@@ -367,15 +367,19 @@ ci-dry-run: ci-validate ## Layer 2: Static + dry-run validation (no credentials 
 .PHONY: health-check
 health-check: check-kubectl ## Verify all HyperFleet components are healthy
 	@echo "Checking HyperFleet components..."
-	@for deploy in $$(kubectl get deployments --namespace $(NAMESPACE) --kubeconfig $(KUBECONFIG) -o name); do \
-		echo "  Waiting for $$deploy..."; \
-		kubectl rollout status $$deploy --namespace $(NAMESPACE) --kubeconfig $(KUBECONFIG) --timeout=300s; \
-	done
+	@deploys=$$(kubectl get deployments --namespace $(NAMESPACE) --kubeconfig $(KUBECONFIG) -o name) && \
+		[ -n "$$deploys" ] || { echo "ERROR: no deployments found in namespace $(NAMESPACE)"; exit 1; }; \
+		for deploy in $$deploys; do \
+			echo "  Waiting for $$deploy..."; \
+			kubectl rollout status $$deploy --namespace $(NAMESPACE) --kubeconfig $(KUBECONFIG) --timeout=300s; \
+		done
 	@echo "Checking Maestro components..."
-	@for deploy in $$(kubectl get deployments --namespace $(MAESTRO_NS) --kubeconfig $(KUBECONFIG) -o name); do \
-		echo "  Waiting for $$deploy..."; \
-		kubectl rollout status $$deploy --namespace $(MAESTRO_NS) --kubeconfig $(KUBECONFIG) --timeout=300s; \
-	done
+	@deploys=$$(kubectl get deployments --namespace $(MAESTRO_NS) --kubeconfig $(KUBECONFIG) -o name) && \
+		[ -n "$$deploys" ] || { echo "ERROR: no deployments found in namespace $(MAESTRO_NS)"; exit 1; }; \
+		for deploy in $$deploys; do \
+			echo "  Waiting for $$deploy..."; \
+			kubectl rollout status $$deploy --namespace $(MAESTRO_NS) --kubeconfig $(KUBECONFIG) --timeout=300s; \
+		done
 	@echo "OK: all components healthy"
 
 .PHONY: destroy-terraform
