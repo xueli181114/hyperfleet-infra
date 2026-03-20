@@ -376,14 +376,14 @@ health-check: check-kubectl ## Verify all HyperFleet components are healthy
 		[ -n "$$deploys" ] || { echo "ERROR: no deployments found in namespace $(NAMESPACE)"; exit 1; }; \
 		for deploy in $$deploys; do \
 			echo "  Waiting for $$deploy..."; \
-			kubectl rollout status $$deploy --namespace $(NAMESPACE) --kubeconfig $(KUBECONFIG) --timeout=300s; \
+			kubectl rollout status $$deploy --namespace $(NAMESPACE) --kubeconfig $(KUBECONFIG) --timeout=300s || exit 1; \
 		done
 	@echo "Checking Maestro components..."
 	@deploys=$$(kubectl get deployments --namespace $(MAESTRO_NS) --kubeconfig $(KUBECONFIG) -o name) && \
 		[ -n "$$deploys" ] || { echo "ERROR: no deployments found in namespace $(MAESTRO_NS)"; exit 1; }; \
 		for deploy in $$deploys; do \
 			echo "  Waiting for $$deploy..."; \
-			kubectl rollout status $$deploy --namespace $(MAESTRO_NS) --kubeconfig $(KUBECONFIG) --timeout=300s; \
+			kubectl rollout status $$deploy --namespace $(MAESTRO_NS) --kubeconfig $(KUBECONFIG) --timeout=300s || exit 1; \
 		done
 	@echo "OK: all components healthy"
 
