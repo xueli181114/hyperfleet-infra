@@ -132,19 +132,11 @@ install-maestro: check-helm check-kubectl check-maestro-namespace ## Install Mae
 .PHONY: create-maestro-consumer
 create-maestro-consumer: check-kubectl ## Create a Maestro consumer (requires Maestro server running)
 	@echo "Creating Maestro consumer '$(MAESTRO_CONSUMER)'..."
-	@kubectl delete pod maestro-consumer-create --namespace $(MAESTRO_NS) --kubeconfig $(KUBECONFIG) --ignore-not-found >/dev/null 2>&1
-	@kubectl run maestro-consumer-create --restart=Never \
-		--namespace $(MAESTRO_NS) \
-		--kubeconfig $(KUBECONFIG) \
-		--image=curlimages/curl:latest -- \
+	@kubectl exec deploy/maestro --namespace $(MAESTRO_NS) --kubeconfig $(KUBECONFIG) -- \
 		curl -sf -X POST \
 		-H "Content-Type: application/json" \
 		http://maestro.$(MAESTRO_NS).svc.cluster.local:8000/api/maestro/v1/consumers \
 		-d '{"name": "$(MAESTRO_CONSUMER)"}'
-	@kubectl wait --for=condition=Ready pod/maestro-consumer-create --namespace $(MAESTRO_NS) --kubeconfig $(KUBECONFIG) --timeout=60s 2>/dev/null || true
-	@kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/maestro-consumer-create --namespace $(MAESTRO_NS) --kubeconfig $(KUBECONFIG) --timeout=60s
-	@kubectl logs maestro-consumer-create --namespace $(MAESTRO_NS) --kubeconfig $(KUBECONFIG)
-	@kubectl delete pod maestro-consumer-create --namespace $(MAESTRO_NS) --kubeconfig $(KUBECONFIG) --ignore-not-found >/dev/null 2>&1
 	@echo ""
 	@echo "OK: consumer '$(MAESTRO_CONSUMER)' created"
 
