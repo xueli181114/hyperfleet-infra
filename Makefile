@@ -137,13 +137,11 @@ create-maestro-consumer: check-kubectl ## Create a Maestro consumer (requires Ma
 			curl -sSf -X POST \
 			-H "Content-Type: application/json" \
 			http://maestro.$(MAESTRO_NS).svc.cluster.local:8000/api/maestro/v1/consumers \
-			-d '{"name": "$(MAESTRO_CONSUMER)"}' && exit 0; \
+			-d '{"name": "$(MAESTRO_CONSUMER)"}' && { echo ""; echo "OK: consumer '$(MAESTRO_CONSUMER)' created"; exit 0; }; \
 		echo "  Attempt $$i failed, retrying in 5s..."; \
 		sleep 5; \
 	done; \
 	echo "ERROR: failed to create Maestro consumer after 5 attempts"; exit 1
-	@echo ""
-	@echo "OK: consumer '$(MAESTRO_CONSUMER)' created"
 
 # set-chart-ref: update the ?ref= and org in a Chart.yaml dependency URL
 # Usage: $(call set-chart-ref,<chart-dir>,<ref>)
